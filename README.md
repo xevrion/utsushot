@@ -67,11 +67,15 @@ Runtime dependencies: `grim` for capture, plus `wl-clipboard` for `--copy` and `
 ## Usage
 
 ```sh
-utsushot -- foot                     # 4x capture of foot, to ~/Pictures/
-utsushot --scale 2 --copy -- kitty   # 2x, straight to the clipboard
-utsushot --scale 8 -- $BROWSER       # 8x; phantom is 8x your screen size
-utsushot --list-backends             # what's supported, what's detected here
+utsushot                             # capture the screen, to ~/Pictures/
+utsushot --copy                      # same, straight to the clipboard
+utsushot --output-name HDMI-A-1       # a specific display
+utsushot -- foot                     # run foot on a 4x phantom and capture that
+utsushot --scale 8 -- $BROWSER        # same, at 8x
+utsushot --list-backends              # what's supported, what's detected here
 ```
+
+With no command, utsushot captures the display you are looking at. Naming a command after `--` runs it on a phantom output instead, which is where the unlimited supersampling lives.
 
 The phantom is sized from your focused output, so on a 1920x1080 screen `--scale 4` renders into 7680x4320. Slow-starting applications may need a longer `--settle` than the 600ms default.
 

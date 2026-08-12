@@ -222,9 +222,9 @@ impl Backend for NiriBackend {
     fn create_phantom(&mut self, w: u32, h: u32, scale: f64) -> Result<OutputId, Error> {
         if self.app.is_empty() {
             return Err(Error::Usage(
-                "the niri backend captures an application in a nested compositor, so it needs \
-                 one to run: utsushot -- <command>. See docs/backends/niri.md for why a live \
-                 window cannot be used."
+                "this backend runs an application on a phantom output, so it needs a command: \
+                 utsushot -- <command>. Run utsushot with no command to capture the screen \
+                 instead."
                     .into(),
             ));
         }

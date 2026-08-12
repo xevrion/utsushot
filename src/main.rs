@@ -44,7 +44,21 @@ fn run(cli: &Cli) -> Result<(), Error> {
         return Ok(());
     }
 
-    if cli.live {
+    // Validate an explicit --backend before anything else, so a typo is an
+    // error in every mode rather than only the phantom-output one.
+    if let Some(name) = &cli.backend {
+        if BackendKind::parse(name).is_none() {
+            return Err(Error::Usage(format!(
+                "unknown backend '{name}'; try one of: niri, sway, hyprland"
+            )));
+        }
+    }
+
+    // No command means "capture what is on screen", which is what a screenshot
+    // tool should do when run bare. Naming a command is the opt-in to the
+    // phantom-output mode, so `--live` is only needed to force screen capture
+    // when a command happens to be present.
+    if cli.live || cli.app.is_empty() {
         return run_live(cli);
     }
 

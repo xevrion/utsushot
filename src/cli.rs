@@ -56,12 +56,13 @@ pub struct Cli {
     #[arg(long, default_value_t = 600)]
     pub settle: u64,
 
-    /// Capture the live desktop instead of running an application.
+    /// Capture the screen even when a command was given.
     ///
-    /// Temporarily switches the output to the largest mode it advertises,
-    /// captures, then restores. Your screen visibly changes while this happens,
-    /// and the ceiling is whatever the monitor supports: a display whose best
-    /// mode equals its current one gains nothing.
+    /// This is the default with no command, so the flag is only needed to
+    /// override the phantom-output mode. Screen capture temporarily switches
+    /// the output to the largest mode it advertises and then restores it, so
+    /// the display visibly changes, and the ceiling is whatever the monitor
+    /// supports: a display already at its best mode gains nothing.
     #[arg(long)]
     pub live: bool,
 
@@ -199,6 +200,30 @@ mod tests {
         assert_eq!(parse(&["-v"]).log_level(), tracing::Level::DEBUG);
         assert_eq!(parse(&["-vv"]).log_level(), tracing::Level::TRACE);
         assert_eq!(parse(&[]).log_level(), tracing::Level::INFO);
+    }
+
+    #[test]
+    fn no_command_means_capture_the_screen() {
+        // Running the tool bare has to take a screenshot, not fail with advice
+        // about phantom outputs.
+        assert!(parse(&[]).app.is_empty());
+    }
+
+    #[test]
+    fn a_trailing_command_is_captured_verbatim() {
+        let cli = parse(&["--", "kitty", "-e", "sh", "-c", "echo hi"]);
+        assert_eq!(cli.app, vec!["kitty", "-e", "sh", "-c", "echo hi"]);
+    }
+
+    #[test]
+    fn flags_after_the_separator_belong_to_the_command() {
+        // `utsushot -- foot --scale 2` must pass --scale to foot, not parse it.
+        let cli = parse(&["--", "foot", "--scale", "2"]);
+        assert_eq!(cli.app, vec!["foot", "--scale", "2"]);
+        assert!(
+            (cli.scale - 4.0).abs() < f64::EPSILON,
+            "our own scale stays default"
+        );
     }
 
     #[test]
