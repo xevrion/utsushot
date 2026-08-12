@@ -1,0 +1,74 @@
+name: Bug report
+description: Something went wrong during a capture
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If utsushot left your session in a broken state (windows stranded on a
+        phantom output, a display that will not come back), please say so
+        prominently. Those are the highest-priority bugs in this project.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `utsushot --scale 4`
+        2. ...
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: utsushot --scale 4 --copy
+    validations:
+      required: true
+
+  - type: textarea
+    id: verbose-output
+    attributes:
+      label: Verbose output
+      description: Output of the same command with `-vv`. This is rendered as a code block automatically.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: compositor
+    attributes:
+      label: Compositor and version
+      placeholder: "niri 26.04"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: utsushot version
+      description: Output of `utsushot --version`, or the commit hash if built from source.
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: "Fedora 43"
+
+  - type: checkboxes
+    id: session-state
+    attributes:
+      label: Session state
+      options:
+        - label: My session was left in a broken state by this bug

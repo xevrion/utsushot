@@ -1,0 +1,47 @@
+[graph]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+# utsushot is GPL-3.0-or-later, so dependencies must be GPL-3.0 compatible.
+# Permissive licenses are compatible in the one direction we care about: they
+# can be combined into a GPL work. Copyleft entries other than our own license
+# do not belong here without checking compatibility first.
+#
+# Kept to licenses actually present in the tree, so that adding a dependency
+# under a new license is a deliberate decision rather than a silent one.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "GPL-3.0-or-later", # utsushot itself, and niri-ipc
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+# The allowlist above is intentionally a little wider than the current tree, so
+# routine dependency additions do not fail CI on a license that was always fine.
+# Unused entries are therefore expected and should not be warnings.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

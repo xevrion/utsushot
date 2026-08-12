@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Nix
+/result
+/result-*
+
+# Local scratch captures
+/*.png

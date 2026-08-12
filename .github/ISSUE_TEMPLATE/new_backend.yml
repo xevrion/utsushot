@@ -1,0 +1,63 @@
+name: New backend
+description: Propose or claim support for a compositor
+labels: ["backend", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New backends are the contribution this project most wants.
+        [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) walks through the
+        `Backend` trait, and `docs/backends/` may already have notes on your
+        compositor.
+
+  - type: input
+    id: compositor
+    attributes:
+      label: Compositor
+      placeholder: "River, Cosmic, KWin, ..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: output-creation
+    attributes:
+      label: Can it create an output at runtime?
+      description: |
+        This is the decisive question. sway has `create_output` and Hyprland has
+        `output create headless`; niri has neither, which is why its backend
+        takes a different approach entirely.
+      options:
+        - "Yes, via its own IPC"
+        - "Yes, via the xdg-desktop-portal VIRTUAL source type"
+        - "No, an output must be pre-configured"
+        - "I do not know yet"
+    validations:
+      required: true
+
+  - type: textarea
+    id: mechanism
+    attributes:
+      label: How would it work?
+      description: |
+        The commands or API calls for creating the output, setting its mode and
+        **scale**, moving a target onto it, and tearing it down. The scale is
+        the part that matters; without it you get a bigger viewport rather than
+        a re-render.
+    validations:
+      required: true
+
+  - type: textarea
+    id: cleanup
+    attributes:
+      label: How does cleanup work?
+      description: |
+        How the session is restored, and what happens if utsushot is killed
+        mid-capture.
+
+  - type: checkboxes
+    id: participation
+    attributes:
+      label: Participation
+      options:
+        - label: I am claiming this and intend to implement it
+        - label: I can test on this compositor but cannot implement it

@@ -1,0 +1,44 @@
+[package]
+name = "utsushot"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.75"
+license = "GPL-3.0-or-later"
+description = "Supersampled Wayland screenshots via a temporary high-resolution phantom output"
+repository = "https://github.com/xevrion/utsushot"
+homepage = "https://github.com/xevrion/utsushot"
+readme = "README.md"
+keywords = ["screenshot", "wayland", "niri", "supersampling", "hidpi"]
+categories = ["command-line-utilities", "multimedia::images"]
+exclude = ["/.github", "/docs", "/flake.nix", "/flake.lock"]
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+directories = "6.0.0"
+niri-ipc = "26.4.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0.20"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# An unwrap on a restore step would strand the user on the phantom output, so
+# these are worth flagging. Tests opt back out via `allow` at the module level:
+# there, panicking on a broken invariant is the whole point.
+unwrap_used = "warn"
+expect_used = "warn"
+# Allowed from pedantic: the CLI surface is documented in README, not rustdoc.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+
+[lints.rust]
+missing_debug_implementations = "warn"
+unsafe_code = "forbid"
+
+[profile.release]
+lto = "thin"
+strip = true
