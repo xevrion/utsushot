@@ -1,33 +1,128 @@
 diff --git a/src/niri.rs b/src/niri.rs
-index ec40e01..bef4b17 100644
+index ec40e01..331ae40 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -5552,6 +5552,28 @@ impl Niri {
-         let size = transform.transform_size(size);
- 
-         let scale = Scale::from(output.current_scale().fractional_scale());
-+
-+        // utsushot: supersample the screenshot by rendering the scene into a
-+        // larger offscreen texture. The output mode is untouched, so there is
-+        // no modeset and no blanking, and the factor is not limited by what the
-+        // panel can display.
-+        // Read per-capture from a file so the factor can be chosen without
-+        // restarting the compositor; the environment is fixed at startup.
-+        // A missing or malformed file simply means no supersampling.
-+        let ss = std::env::var("XDG_RUNTIME_DIR")
+@@ -5542,6 +5542,110 @@ impl Niri {
+         write_to_disk: bool,
+         include_pointer: bool,
+         path: Option<String>,
++    ) -> anyhow::Result<()> {
++        // utsushot: a factor written to this file requests a supersampled
++        // screenshot: every surface on the output is asked to re-render at
++        // factor times its current scale (their logical sizes are unchanged,
++        // so nothing on screen moves), and after a settle delay the scene is
++        // rendered into an offscreen texture factor times the output size.
++        // The display mode and output scale are never touched.
++        let request = std::env::var("XDG_RUNTIME_DIR")
 +            .ok()
 +            .map(|d| std::path::PathBuf::from(d).join("niri-screenshot-supersample"))
-+            .and_then(|p| std::fs::read_to_string(p).ok())
-+            .or_else(|| std::env::var("NIRI_SCREENSHOT_SUPERSAMPLE").ok())
-+            .and_then(|v| v.trim().parse::<f64>().ok())
-+            .filter(|v| v.is_finite() && (1.0..=8.0).contains(v))
-+            .unwrap_or(1.0);
-+        let size = Size::from((
-+            ((size.w as f64) * ss).round() as i32,
-+            ((size.h as f64) * ss).round() as i32,
-+        ));
-+        let scale = Scale::from((scale.x * ss, scale.y * ss));
++            .and_then(|p| std::fs::read_to_string(p).ok());
++        if let Some(request) = request {
++            let mut parts = request.split_whitespace();
++            let factor = parts.next().and_then(|v| v.parse::<f64>().ok());
++            let settle = parts
++                .next()
++                .and_then(|v| v.parse::<u64>().ok())
++                .unwrap_or(800);
++            if let Some(factor) = factor.filter(|f| f.is_finite() && (1.0..=8.0).contains(f)) {
++                if factor > 1.0 {
++                    return self.screenshot_supersampled(
++                        output,
++                        factor,
++                        settle,
++                        write_to_disk,
++                        include_pointer,
++                        path,
++                    );
++                }
++            }
++        }
 +
++        self.screenshot_now(renderer, output, 1.0, write_to_disk, include_pointer, path)
++    }
++
++    /// Sends `scale` as the preferred scale of every surface on `output`.
++    ///
++    /// Fractional-scale-aware clients respond by re-rendering their buffers at
++    /// the new density while keeping the same logical size via viewport, so
++    /// the on-screen layout does not change.
++    fn set_surface_scales(&mut self, output: &Output, scale: output::Scale) {
++        let transform = output.current_transform();
++        for mapped in self.layout.windows_for_output(output) {
++            mapped.set_preferred_scale_transform(scale, transform);
++        }
++        for layer in layer_map_for_output(output).layers() {
++            layer.with_surfaces(|surface, data| {
++                crate::utils::send_scale_transform(surface, data, scale, transform);
++            });
++        }
++    }
++
++    fn screenshot_supersampled(
++        &mut self,
++        output: &Output,
++        factor: f64,
++        settle_ms: u64,
++        write_to_disk: bool,
++        include_pointer: bool,
++        path: Option<String>,
++    ) -> anyhow::Result<()> {
++        let base = output.current_scale().fractional_scale();
++        self.set_surface_scales(output, output::Scale::Fractional(base * factor));
++        self.queue_redraw(output);
++
++        // Clients need real time to receive the new scale, re-render and
++        // commit, and the compositor must keep dispatching while they do, so
++        // the capture happens from a timer rather than a sleep.
++        let output = output.clone();
++        let timer = Timer::from_duration(Duration::from_millis(settle_ms));
++        self.event_loop
++            .insert_source(timer, move |_, _, state| {
++                if state.niri.layout.monitor_for_output(&output).is_some() {
++                    let path = path.clone();
++                    state.backend.with_primary_renderer(|renderer| {
++                        if let Err(err) = state.niri.screenshot_now(
++                            renderer,
++                            &output,
++                            factor,
++                            write_to_disk,
++                            include_pointer,
++                            path,
++                        ) {
++                            warn!("error taking supersampled screenshot: {err:?}");
++                        }
++                    });
++                    let restore = output.current_scale();
++                    state.niri.set_surface_scales(&output, restore);
++                    state.niri.queue_redraw(&output);
++                }
++                TimeoutAction::Drop
++            })
++            .map_err(|e| anyhow::anyhow!("inserting screenshot timer: {e}"))?;
++        Ok(())
++    }
++
++    fn screenshot_now(
++        &mut self,
++        renderer: &mut GlesRenderer,
++        output: &Output,
++        factor: f64,
++        write_to_disk: bool,
++        include_pointer: bool,
++        path: Option<String>,
+     ) -> anyhow::Result<()> {
+         let _span = tracy_client::span!("Niri::screenshot");
+ 
+@@ -5551,7 +5655,11 @@ impl Niri {
+         let transform = output.current_transform();
+         let size = transform.transform_size(size);
+ 
+-        let scale = Scale::from(output.current_scale().fractional_scale());
++        let size = Size::from((
++            ((size.w as f64) * factor).round() as i32,
++            ((size.h as f64) * factor).round() as i32,
++        ));
++        let scale = Scale::from(output.current_scale().fractional_scale() * factor);
          let ctx = RenderCtx {
              renderer,
              target: RenderTarget::ScreenCapture,

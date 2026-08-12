@@ -229,11 +229,17 @@ fn supersample_request_path() -> Option<std::path::PathBuf> {
 /// screenshot; the caller detects that from the resulting image and falls back
 /// to switching modes. The 16-line compositor patch that enables this lives in
 /// `docs/niri-supersample.patch`.
-fn try_compositor_supersample(path: &Path, factor: f64) -> Result<(), Error> {
+fn try_compositor_supersample(
+    path: &Path,
+    factor: f64,
+    settle: std::time::Duration,
+) -> Result<(), Error> {
     let request = supersample_request_path()
         .ok_or_else(|| Error::Ipc("XDG_RUNTIME_DIR is not set".into()))?;
 
-    std::fs::write(&request, factor.to_string())?;
+    // "<factor> <settle_ms>": the settle is how long the compositor gives
+    // clients to re-render at the boosted scale before capturing.
+    std::fs::write(&request, format!("{factor} {}", settle.as_millis()))?;
     // Removed however this returns, so a stale factor cannot silently apply to
     // somebody else's screenshot later.
     let _cleanup = RequestFileGuard(request);
@@ -253,9 +259,10 @@ fn try_compositor_supersample(path: &Path, factor: f64) -> Result<(), Error> {
         )));
     }
 
-    // The action returns as soon as the compositor accepts it; the PNG is
-    // encoded and written on another thread, so the file does not exist yet.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    // The action returns as soon as the compositor accepts it; the capture
+    // itself happens after the settle delay and the PNG is encoded on another
+    // thread, so the file appears well after the command exits.
+    let deadline = std::time::Instant::now() + settle + std::time::Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
         if png_size(path).is_some() {
             return Ok(());
@@ -312,7 +319,7 @@ pub fn capture(
     let is_focused = focused_output().is_ok_and(|f| f == name);
 
     if supersample > 1.0 && is_focused {
-        match try_compositor_supersample(path, supersample) {
+        match try_compositor_supersample(path, supersample, settle) {
             Ok(()) => match png_size(path) {
                 // Honoured only if the image is larger than the output itself;
                 // an equal-sized one means the request was ignored.
