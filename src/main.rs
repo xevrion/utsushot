@@ -8,6 +8,7 @@ mod cli;
 mod detect;
 mod error;
 mod live;
+mod window;
 
 use clap::Parser;
 
@@ -52,6 +53,10 @@ fn run(cli: &Cli) -> Result<(), Error> {
                 "unknown backend '{name}'; try one of: niri, sway, hyprland"
             )));
         }
+    }
+
+    if cli.window || cli.window_id.is_some() {
+        return run_window(cli);
     }
 
     // No command means "capture what is on screen", which is what a screenshot
@@ -133,6 +138,30 @@ fn run(cli: &Cli) -> Result<(), Error> {
         capture::notify(&output_path);
     }
 
+    Ok(())
+}
+
+/// Captures one live window, supersampled via an output scale boost.
+fn run_window(cli: &Cli) -> Result<(), Error> {
+    let output_path = cli.resolve_output();
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let (w, h) = window::capture(
+        cli.window_id,
+        &output_path,
+        cli.scale,
+        cli.settle_duration(),
+    )?;
+    tracing::info!("wrote {} ({w}x{h})", output_path.display());
+
+    if cli.copy {
+        capture::copy_to_clipboard(&output_path)?;
+    }
+    if cli.notify {
+        capture::notify(&output_path);
+    }
     Ok(())
 }
 

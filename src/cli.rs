@@ -70,6 +70,18 @@ pub struct Cli {
     #[arg(long, value_name = "NAME")]
     pub output_name: Option<String>,
 
+    /// Capture the focused window at true --scale density.
+    ///
+    /// Works on stock niri: the window is floated, its logical size pinned,
+    /// and the output scale raised while it re-renders. No black flash, but
+    /// the desktop visibly zooms for the settle duration.
+    #[arg(short = 'w', long)]
+    pub window: bool,
+
+    /// Window id to capture instead of the focused one (implies --window).
+    #[arg(long, value_name = "ID")]
+    pub window_id: Option<u64>,
+
     /// Verbose logging; repeat for more (-v debug, -vv trace).
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,

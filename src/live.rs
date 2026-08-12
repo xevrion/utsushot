@@ -279,7 +279,7 @@ fn try_compositor_supersample(
 /// Used to tell whether the compositor actually honoured a supersample
 /// request: a stock build writes an output-sized image and reports success, so
 /// the returned file is the only evidence of what really happened.
-fn png_size(path: &Path) -> Option<(u32, u32)> {
+pub fn png_size(path: &Path) -> Option<(u32, u32)> {
     let bytes = std::fs::read(path).ok()?;
     // 8-byte signature, then the IHDR chunk whose width and height are the
     // first two big-endian u32s of its data at offsets 16 and 20.

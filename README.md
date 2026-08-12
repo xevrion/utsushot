@@ -69,13 +69,14 @@ Runtime dependencies: `grim` for capture, plus `wl-clipboard` for `--copy` and `
 ```sh
 utsushot                             # capture the screen, to ~/Pictures/
 utsushot --copy                      # same, straight to the clipboard
+utsushot -w --scale 4                # focused window at TRUE 4x (stock niri)
 utsushot --output-name HDMI-A-1       # a specific display
 utsushot -- foot                     # run foot on a 4x phantom and capture that
 utsushot --scale 8 -- $BROWSER        # same, at 8x
 utsushot --list-backends              # what's supported, what's detected here
 ```
 
-With no command, utsushot captures the display you are looking at. Naming a command after `--` runs it on a phantom output instead, which is where the unlimited supersampling lives.
+With no command, utsushot captures the display you are looking at. Naming a command after `--` runs it on a phantom output instead. `-w` captures the focused window at genuine N times density on stock niri: the window is floated with its logical size pinned while the output scale is briefly raised, so the client itself re-renders denser. No black flash, though the desktop visibly zooms for the settle duration. The approach was suggested by niri's maintainer in [discussion #4436](https://github.com/niri-wm/niri/discussions/4436).
 
 The phantom is sized from your focused output, so on a 1920x1080 screen `--scale 4` renders into 7680x4320. Slow-starting applications may need a longer `--settle` than the 600ms default.
 

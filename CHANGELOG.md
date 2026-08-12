@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `-w`/`--window`: true supersampled capture of a live window on stock niri,
+  via a temporary output scale boost with the window floated and its logical
+  size pinned. Verified 1988x4176 from a 497x1044 window at `--scale 4`, with
+  genuinely re-rendered content and full state restoration.
+- The niri supersample compositor patch (v2) now boosts per-surface preferred
+  scales before rendering, which is what makes clients contribute real detail;
+  v1 only enlarged the render and upscaled client buffers.
+
 - Working niri backend. Runs a nested niri instance whose output is sized past
   the physical display, launches the target application into it, and captures
   it at true N× density. Verified producing 7680x4320 from a 1920x1080 screen.
