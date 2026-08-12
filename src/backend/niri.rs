@@ -30,7 +30,18 @@ const PHANTOM_OUTPUT_NAME: &str = "winit";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How long to wait for a launched application to map a window.
-const APP_TIMEOUT: Duration = Duration::from_secs(15);
+///
+/// Generous because the phantom can be enormous: allocating and painting a
+/// 12800x7200 surface takes a client noticeably longer than a normal window.
+const APP_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Largest phantom dimension worth attempting.
+///
+/// GPUs cap texture size, very commonly at 16384, and the compositor needs
+/// headroom below that for its own buffers. Measured on this hardware:
+/// 12800x7200 works and 15360x8640 does not. Rejecting the request up front
+/// gives a clear reason instead of a client that silently never appears.
+const MAX_PHANTOM_DIMENSION: u32 = 13000;
 
 #[derive(Debug)]
 pub struct NiriBackend {
@@ -220,6 +231,12 @@ impl Backend for NiriBackend {
     }
 
     fn create_phantom(&mut self, w: u32, h: u32, scale: f64) -> Result<OutputId, Error> {
+        if w > MAX_PHANTOM_DIMENSION || h > MAX_PHANTOM_DIMENSION {
+            return Err(Error::Usage(format!(
+                "a {w}x{h} phantom exceeds what GPUs can allocate (limit here is about \
+                 {MAX_PHANTOM_DIMENSION} per side); try a smaller --scale"
+            )));
+        }
         if self.app.is_empty() {
             return Err(Error::Usage(
                 "this backend runs an application on a phantom output, so it needs a command: \
