@@ -13,8 +13,11 @@ cargo build
 cargo test
 ```
 
-MSRV is 1.75. Runtime tools you will want: `grim`, `wl-clipboard`, and the
-compositor you are targeting.
+MSRV is 1.85, set by clap 4.6 which requires edition 2024. CI enforces it, so a
+dependency that raises the floor will fail there rather than silently.
+
+Runtime tools you will want: `grim`, `wl-clipboard`, and the compositor you are
+targeting.
 
 ### Nix
 

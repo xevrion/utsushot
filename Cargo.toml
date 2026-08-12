@@ -2,7 +2,9 @@
 name = "utsushot"
 version = "0.0.1"
 edition = "2021"
-rust-version = "1.75"
+# Set by clap 4.6, which requires edition 2024 and so 1.85. Lowering this means
+# pinning clap back; CI enforces it on every push.
+rust-version = "1.85"
 license = "GPL-3.0-or-later"
 description = "Supersampled Wayland screenshots via a temporary high-resolution phantom output"
 repository = "https://github.com/xevrion/utsushot"
