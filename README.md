@@ -8,7 +8,12 @@ Supersampled screenshots on Wayland. Instead of capturing your display's pixels 
 
 Named after utsushi-e (写し絵), the Edo-era magic-lantern shows that projected phantom images onto screens.
 
-> **Status: early development.** Working on niri: `utsushot -- <command>` produces a genuine N× capture. It photographs an application launched into the phantom, **not your existing desktop**. See [Scope](#scope) for why that distinction is currently forced on us.
+> **Status: early development, working on niri.** Two modes:
+>
+> - `utsushot -- <command>` runs an application on a phantom output at N× and captures it. Genuine N× at any factor, and your session is never touched.
+> - `utsushot --live` captures the desktop you are actually looking at. Limited to the largest mode your monitor advertises, and the screen blanks briefly while the mode changes.
+>
+> Neither can give you an unlimited-resolution capture of your live desktop without a compositor change. [Scope](#scope) explains why, and what would fix it.
 
 ## Why not just upscale?
 

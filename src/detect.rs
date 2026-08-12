@@ -35,12 +35,6 @@ impl BackendKind {
     pub fn all() -> [Self; 3] {
         [Self::Niri, Self::Sway, Self::Hyprland]
     }
-
-    /// Whether this backend does anything beyond returning "not implemented".
-    #[must_use]
-    pub fn is_implemented(self) -> bool {
-        matches!(self, Self::Niri)
-    }
 }
 
 impl fmt::Display for BackendKind {

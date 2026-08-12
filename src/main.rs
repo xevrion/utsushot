@@ -237,20 +237,23 @@ fn list_backends(env: &impl detect::Env) {
         .map(|c| c.kind)
         .collect();
 
-    println!("{:<12} {:<14} DETECTED HERE", "BACKEND", "STATUS");
+    println!("{:<12} {:<10} {:<24} NOTES", "BACKEND", "DETECTED", "MODES");
     for kind in BackendKind::all() {
-        let status = if kind.is_implemented() {
-            "in progress"
-        } else {
-            "planned"
-        };
         let here = if detected.contains(&kind) {
             "yes"
         } else {
             "no"
         };
-        println!("{:<12} {status:<14} {here}", kind.as_str());
+        let (modes, notes) = match kind {
+            BackendKind::Niri => ("app capture, --live", "both working"),
+            BackendKind::Sway => ("none", "planned: swaymsg create_output"),
+            BackendKind::Hyprland => ("none", "planned: hyprctl output create"),
+        };
+        println!("{:<12} {here:<10} {modes:<24} {notes}", kind.as_str());
     }
+    println!();
+    println!("app capture: utsushot -- <command>    (true Nx, no disruption)");
+    println!("--live:      utsushot --live          (your desktop, capped by the monitor's modes)");
 }
 
 #[cfg(test)]
