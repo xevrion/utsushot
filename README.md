@@ -38,13 +38,16 @@ It is the same idea as a game's photo mode rendering at higher-than-display reso
 
 ## Scope
 
-utsushot captures **an application it launches into the phantom output**. It does not photograph your existing desktop.
+Every mode trades something, because a live Wayland window has exactly one buffer at one scale, and the pixels utsushot wants do not exist until a client renders them.
 
-That limitation is not a design preference, it is what the protocol allows. A running Wayland client is bound to the compositor it connected to, and there is no way to migrate a live surface to another compositor. So the phantom has to be a place where applications *start*, not somewhere existing windows can be moved.
+| mode | captures | true N×? | disruption | ceiling |
+|---|---|---|---|---|
+| `utsushot -- <cmd>` | a fresh app instance | yes, any factor | none | GPU texture size |
+| `utsushot -w` | one live window | yes | desktop zooms briefly | client cooperation |
+| `utsushot` (screen) | the live desktop | no, borrowed mode | black flash | monitor's best mode |
+| compositor patch | the live desktop | yes, 2x proven | none | client cooperation |
 
-Capturing your real, current screen at N× would instead mean reconfiguring your actual output to an oversized mode and a higher scale, capturing, and restoring it. On niri that is possible in principle, but it visibly disrupts the session and a failure part-way through can leave a display in a mode the panel cannot show. It is tracked in [#9](https://github.com/xevrion/utsushot/issues/9) and deliberately not implemented yet.
-
-What would remove the tradeoff entirely is compositor support for genuine virtual outputs, which is [#10](https://github.com/xevrion/utsushot/issues/10).
+A running window cannot be moved onto a phantom output (no protocol migrates a live surface between compositors), which is why the fresh-instance mode exists. The compositor patch row requires the patched niri in `docs/niri-supersample.patch`; everything else works on stock niri. Genuine virtual outputs (niri PR #3800, our [#10](https://github.com/xevrion/utsushot/issues/10)) would collapse most of these tradeoffs.
 
 ### Why not `grim -s 4`?
 
