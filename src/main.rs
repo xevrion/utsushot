@@ -49,7 +49,10 @@ fn run(cli: &Cli) -> Result<(), Error> {
     // so check it here rather than failing later with an opaque IPC error.
     let (mut backend, reachable): (Box<dyn Backend>, bool) = match kind {
         BackendKind::Niri => (
-            Box::new(backend::niri::NiriBackend::new()),
+            Box::new(backend::niri::NiriBackend::new(
+                cli.app.clone(),
+                cli.settle_duration(),
+            )),
             backend::niri::NiriBackend::available(),
         ),
         BackendKind::Sway => (
@@ -81,10 +84,17 @@ fn run(cli: &Cli) -> Result<(), Error> {
         std::fs::create_dir_all(parent)?;
     }
 
-    // TODO(#4): read the physical output geometry from the compositor instead of
-    // assuming; the phantom dimensions must derive from the real screen.
-    let (width, height) = phantom_size(1920, 1080, cli.scale);
-    tracing::debug!("phantom output: {width}x{height} @ scale {}", cli.scale);
+    let (base_w, base_h) = focused_output_size().unwrap_or_else(|e| {
+        // Not fatal: a sensible default still produces a usable capture, and
+        // saying so is better than refusing to run over a geometry query.
+        tracing::warn!("could not read the focused output ({e}); assuming 1280x720");
+        (1280, 720)
+    });
+    let (width, height) = phantom_size(base_w, base_h, cli.scale);
+    tracing::info!(
+        "phantom output: {width}x{height} @ scale {} (from {base_w}x{base_h})",
+        cli.scale
+    );
 
     let phantom = backend.create_phantom(width, height, cli.scale)?;
     let restore = backend.move_target(&phantom)?;
@@ -105,6 +115,40 @@ fn run(cli: &Cli) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+/// Logical size of the focused output, which is what the phantom scales up.
+///
+/// Deliberately the *logical* size rather than the physical mode: on a display
+/// already running at scale 2, the logical size is what the user actually sees
+/// laid out, and scaling the physical mode instead would overshoot by that
+/// factor.
+fn focused_output_size() -> Result<(u32, u32), Error> {
+    let out = std::process::Command::new("niri")
+        .args(["msg", "-j", "focused-output"])
+        .output()
+        .map_err(|e| Error::Ipc(format!("could not run niri msg: {e}")))?;
+
+    if !out.status.success() {
+        return Err(Error::Ipc("niri msg focused-output failed".into()));
+    }
+
+    let parsed: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| Error::Ipc(format!("could not parse focused-output: {e}")))?;
+
+    let logical = parsed
+        .get("logical")
+        .ok_or_else(|| Error::Ipc("focused output has no logical geometry".into()))?;
+
+    let field = |name: &str| {
+        logical
+            .get(name)
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|v| u32::try_from(v).ok())
+            .ok_or_else(|| Error::Ipc(format!("focused output has no {name}")))
+    };
+
+    Ok((field("width")?, field("height")?))
 }
 
 /// Phantom dimensions for a physical screen at a given supersampling factor.

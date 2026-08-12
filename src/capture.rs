@@ -28,21 +28,46 @@ fn which(program: &str) -> bool {
 ///
 /// TODO(#3): replace with native wlr-screencopy through wayland-client, which
 /// drops the runtime dependency and lets us read the buffer without a temp file.
+#[allow(
+    dead_code,
+    reason = "used by backends capturing on the session display (#7, #8)"
+)]
 pub fn grim_capture(output: &str, path: &Path) -> Result<(), Error> {
+    grim_capture_inner(None, output, path)
+}
+
+/// Captures an output on a specific Wayland display.
+///
+/// Needed for the niri backend, whose phantom output lives on a nested
+/// compositor: without pointing grim at that display it would happily capture
+/// the user's real screen instead, which looks like success and is not.
+pub fn grim_capture_on(display: &str, output: &str, path: &Path) -> Result<(), Error> {
+    grim_capture_inner(Some(display), output, path)
+}
+
+fn grim_capture_inner(display: Option<&str>, output: &str, path: &Path) -> Result<(), Error> {
     require(
         "grim",
         "install grim (e.g. `dnf install grim`, `apt install grim`)",
     )?;
 
-    let status = Command::new("grim")
+    let mut cmd = Command::new("grim");
+    if let Some(display) = display {
+        cmd.env("WAYLAND_DISPLAY", display);
+    }
+
+    let out = cmd
         .arg("-o")
         .arg(output)
         .arg(path)
-        .status()
+        .output()
         .map_err(|e| Error::Capture(format!("could not run grim: {e}")))?;
 
-    if !status.success() {
-        return Err(Error::Capture(format!("grim exited with {status}")));
+    if !out.status.success() {
+        return Err(Error::Capture(format!(
+            "grim failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
     }
     Ok(())
 }

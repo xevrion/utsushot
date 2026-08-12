@@ -12,29 +12,58 @@ pub mod sway;
 
 /// Identifies a phantom output for the lifetime of one capture.
 ///
-/// Backends that reuse a pre-configured output store its name here; backends
-/// that create one at runtime store whatever handle their IPC handed back.
+/// The name is what the capture tool addresses. `display` is set when the
+/// phantom lives on a different Wayland display than the session we were
+/// launched from, as with niri's nested instance, where every command has to be
+/// aimed at that display rather than the user's own.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OutputId(pub String);
+pub struct OutputId {
+    pub name: String,
+    pub display: Option<String>,
+}
 
 impl OutputId {
     #[must_use]
+    #[allow(
+        dead_code,
+        reason = "for backends whose phantom is on the session display (#7, #8)"
+    )]
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            display: None,
+        }
+    }
+
+    /// An output on a nested compositor reachable at `display`.
+    #[must_use]
+    pub fn on_display(name: impl Into<String>, display: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            display: Some(display.into()),
+        }
+    }
+
+    #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.name
     }
 }
 
 /// Whatever a backend needs to put the session back how it found it.
 ///
-/// Deliberately opaque: the niri backend records the workspace the target came
-/// from, while a headless-output backend may only need to know an output was
-/// created. Neither shape is forced on the other.
-#[derive(Debug, Clone, Default)]
-#[allow(dead_code, reason = "populated once move_target is implemented")]
+/// Deliberately opaque, because the backends do genuinely different things. The
+/// niri backend spawns processes and needs to reap them; a backend that moves a
+/// window on the live session needs to remember where it came from instead.
+#[derive(Debug, Default)]
 pub struct RestoreToken {
+    /// Processes to terminate, most recently spawned first.
+    pub children: Vec<std::process::Child>,
     /// Workspace the target lived on before it was moved to the phantom.
+    #[allow(dead_code, reason = "used by backends that move live windows (#7, #8)")]
     pub origin_workspace: Option<u64>,
     /// Window the capture targeted, if a single window was moved.
+    #[allow(dead_code, reason = "used by backends that move live windows (#7, #8)")]
     pub window_id: Option<u64>,
 }
 
@@ -63,8 +92,10 @@ pub trait Backend {
 /// the capture happens with one of these alive.
 pub struct PhantomGuard<'a, B: Backend + ?Sized> {
     backend: &'a mut B,
+    /// Both are taken together by whichever of `disarm` or `drop` runs first,
+    /// so cleanup happens exactly once.
     output: Option<OutputId>,
-    restore: RestoreToken,
+    restore: Option<RestoreToken>,
 }
 
 impl<'a, B: Backend + ?Sized> PhantomGuard<'a, B> {
@@ -72,7 +103,7 @@ impl<'a, B: Backend + ?Sized> PhantomGuard<'a, B> {
         Self {
             backend,
             output: Some(output),
-            restore,
+            restore: Some(restore),
         }
     }
 
@@ -95,17 +126,17 @@ impl<'a, B: Backend + ?Sized> PhantomGuard<'a, B> {
     /// Prefer this on the success path; the `Drop` impl exists for the paths
     /// that never reach it.
     pub fn disarm(mut self) -> Result<(), Error> {
-        match self.output.take() {
-            Some(out) => self.backend.cleanup(out, self.restore.clone()),
-            None => Ok(()),
+        match (self.output.take(), self.restore.take()) {
+            (Some(out), Some(restore)) => self.backend.cleanup(out, restore),
+            _ => Ok(()),
         }
     }
 }
 
 impl<B: Backend + ?Sized> Drop for PhantomGuard<'_, B> {
     fn drop(&mut self) {
-        if let Some(out) = self.output.take() {
-            if let Err(e) = self.backend.cleanup(out, self.restore.clone()) {
+        if let (Some(out), Some(restore)) = (self.output.take(), self.restore.take()) {
+            if let Err(e) = self.backend.cleanup(out, restore) {
                 // A panic here would abort the process mid-unwind and guarantee
                 // the stranded state we are trying to avoid. Log and move on.
                 tracing::error!("failed to restore session after capture: {e}");
@@ -145,7 +176,7 @@ mod tests {
             true
         }
         fn create_phantom(&mut self, _w: u32, _h: u32, _scale: f64) -> Result<OutputId, Error> {
-            Ok(OutputId("spy-0".into()))
+            Ok(OutputId::new("spy-0"))
         }
         fn move_target(&mut self, _out: &OutputId) -> Result<RestoreToken, Error> {
             Ok(RestoreToken::default())
@@ -165,7 +196,7 @@ mod tests {
         let mut spy = Spy { cleaned: &cleaned };
         drop(PhantomGuard::new(
             &mut spy,
-            OutputId("spy-0".into()),
+            OutputId::new("spy-0"),
             RestoreToken::default(),
         ));
         assert!(cleaned.get(), "drop must restore the session");
@@ -175,7 +206,7 @@ mod tests {
     fn guard_cleans_up_exactly_once_when_disarmed() {
         let cleaned = Cell::new(false);
         let mut spy = Spy { cleaned: &cleaned };
-        let guard = PhantomGuard::new(&mut spy, OutputId("spy-0".into()), RestoreToken::default());
+        let guard = PhantomGuard::new(&mut spy, OutputId::new("spy-0"), RestoreToken::default());
         guard.disarm().expect("cleanup should succeed");
         assert!(cleaned.get());
     }
@@ -186,7 +217,7 @@ mod tests {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut spy = Spy { cleaned: &cleaned };
             let _guard =
-                PhantomGuard::new(&mut spy, OutputId("spy-0".into()), RestoreToken::default());
+                PhantomGuard::new(&mut spy, OutputId::new("spy-0"), RestoreToken::default());
             panic!("capture blew up");
         }));
         assert!(result.is_err());

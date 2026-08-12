@@ -4,11 +4,11 @@
 [![crates.io](https://img.shields.io/crates/v/utsushot.svg)](https://crates.io/crates/utsushot)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-Supersampled screenshots on Wayland. Instead of capturing your display's pixels and enlarging them, utsushot builds a temporary high-resolution *phantom* output, moves the target onto it so the toolkit re-renders everything at true N× pixel density, captures that, and puts your session back.
+Supersampled screenshots on Wayland. Instead of capturing your display's pixels and enlarging them, utsushot runs an application on a temporary high-resolution *phantom* output, so the toolkit re-renders everything at true N× pixel density, captures that, and tears the phantom down.
 
 Named after utsushi-e (写し絵), the Edo-era magic-lantern shows that projected phantom images onto screens.
 
-> **Status: early development.** The scaffold, CLI, and backend architecture are in place; no backend can complete a capture yet. See [What's left](#whats-left).
+> **Status: early development.** Working on niri: `utsushot -- <command>` produces a genuine N× capture. It photographs an application launched into the phantom, **not your existing desktop** — see [Scope](#scope) for why that distinction is currently forced on us.
 
 ## Why not just upscale?
 
@@ -31,6 +31,16 @@ utsushot changes the input instead. Wayland-native toolkits render text and vect
 
 It is the same idea as a game's photo mode rendering at higher-than-display resolution, or the Minecraft [Fabrishot](https://github.com/ramidzkh/fabrishot) mod, which tells the game its window is 8K, re-renders into a framebuffer that size, then resizes back. [docs/prior-art.md](docs/prior-art.md) breaks down how Fabrishot works and what utsushot borrows from it.
 
+## Scope
+
+utsushot captures **an application it launches into the phantom output**. It does not photograph your existing desktop.
+
+That limitation is not a design preference, it is what the protocol allows. A running Wayland client is bound to the compositor it connected to, and there is no way to migrate a live surface to another compositor. So the phantom has to be a place where applications *start*, not somewhere existing windows can be moved.
+
+Capturing your real, current screen at N× would instead mean reconfiguring your actual output to an oversized mode and a higher scale, capturing, and restoring it. On niri that is possible in principle, but it visibly disrupts the session and a failure part-way through can leave a display in a mode the panel cannot show. It is tracked in [#9](https://github.com/xevrion/utsushot/issues/9) and deliberately not implemented yet.
+
+What would remove the tradeoff entirely is compositor support for genuine virtual outputs, which is [#10](https://github.com/xevrion/utsushot/issues/10).
+
 ## Install
 
 Nothing is published yet. From source:
@@ -46,10 +56,13 @@ Runtime dependencies: `grim` for capture, plus `wl-clipboard` for `--copy` and `
 ## Usage
 
 ```sh
-utsushot                        # 4x, to ~/Pictures/utsushot_<timestamp>.png
-utsushot --scale 2 --copy       # 2x, straight to the clipboard
-utsushot --list-backends        # what's supported, what's detected here
+utsushot -- foot                     # 4x capture of foot, to ~/Pictures/
+utsushot --scale 2 --copy -- kitty   # 2x, straight to the clipboard
+utsushot --scale 8 -- $BROWSER       # 8x; phantom is 8x your screen size
+utsushot --list-backends             # what's supported, what's detected here
 ```
+
+The phantom is sized from your focused output, so on a 1920x1080 screen `--scale 4` renders into 7680x4320. Slow-starting applications may need a longer `--settle` than the 600ms default.
 
 Exit codes: `0` success, `2` usage, `3` no backend, `4` backend unimplemented, `5` missing dependency, `6` capture failed, `7` restore failed.
 
@@ -57,27 +70,28 @@ Exit codes: `0` success, `2` usage, `3` no backend, `4` backend unimplemented, `
 
 | Backend  | Status      | Approach |
 |----------|-------------|----------|
-| niri     | in progress | Pre-configured disabled output, resized and enabled per capture ([details](docs/backends/niri.md)) |
+| niri     | working     | Nested niri instance sized beyond the physical display ([details](docs/backends/niri.md)) |
 | sway     | planned     | `swaymsg create_output` ([details](docs/backends/sway.md)) |
 | hyprland | planned     | `hyprctl output create headless` ([details](docs/backends/hyprland.md)) |
 | GNOME / KDE | researching | Likely the xdg-desktop-portal ScreenCast virtual source |
 | X11      | not planned | No per-output scaling to exploit; see [docs/backends/x11.md](docs/backends/x11.md) |
 
-niri cannot create outputs over IPC as of 26.04, which is why its approach differs from the others. The [niri backend doc](docs/backends/niri.md) records that finding in full.
+niri cannot create outputs over IPC as of 26.04, and neither the pre-configured-output nor the portal VIRTUAL approach works there. The [niri backend doc](docs/backends/niri.md) records both dead ends and the nested-instance approach that replaced them.
 
 ## What's left
 
 Roughly in order.
 
-- [ ] **#1 niri phantom output** — locate a disabled `utsushot-phantom` output, apply custom mode + scale, enable and disable around the capture
-- [ ] **#2 niri move target** — move window/workspace to the phantom and record the origin for restore
-- [ ] **#4 real output geometry** — derive phantom size from the actual focused output instead of the hardcoded 1920x1080
-- [ ] **#6 wait for clients to settle** — clients need a roundtrip to re-render at the new scale; capturing immediately yields a stale buffer (Fabrishot hits the same problem and solves it with a frame delay)
-- [ ] **#5 live integration tests** — assert captured dimensions and that a failed capture restores the session
+- [x] **#1 niri phantom output** — nested niri instance, sized past the physical display
+- [x] **#2 niri target launch** — run the application inside the phantom and reap it afterwards
+- [x] **#4 real output geometry** — phantom derived from the focused output's logical size
+- [x] **#6 settle delay** — `--settle`, defaulting to 600ms, before capturing
+- [ ] **#9 capture the live session** — reconfigure the real output instead of nesting, so your actual desktop can be captured
+- [ ] **#10 upstream: virtual outputs in niri** — the fix that makes both modes clean
+- [ ] **#5 live integration tests** — assert captured dimensions and that a failed capture cleans up
 - [ ] **#3 native capture** — wlr-screencopy via `wayland-client`, dropping the `grim` dependency
-- [ ] **sway backend** — the first one that gets to create an output at runtime
-- [ ] **hyprland backend**
-- [ ] Window/region selection rather than whole-output only
+- [ ] **#7 sway backend** — `create_output` makes this the easy one
+- [ ] **#8 hyprland backend**
 - [ ] Publish `0.0.1` to crates.io to reserve the name
 
 Contributions are very welcome, and a new backend is the most useful one. [CONTRIBUTING.md](CONTRIBUTING.md) has a walkthrough of the `Backend` trait.

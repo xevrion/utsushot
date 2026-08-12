@@ -46,9 +46,24 @@ pub struct Cli {
     #[arg(long)]
     pub list_backends: bool,
 
+    /// Milliseconds to wait after the target appears, before capturing.
+    ///
+    /// Clients need a moment to finish painting at the phantom's scale;
+    /// capturing too early catches a half-drawn frame.
+    #[arg(long, default_value_t = 600)]
+    pub settle: u64,
+
     /// Verbose logging; repeat for more (-v debug, -vv trace).
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
+
+    /// Application to run inside the phantom output, after `--`.
+    ///
+    /// The niri backend captures a fresh instance of this program rather than
+    /// an existing window, because a running window cannot be moved between
+    /// compositors. See docs/backends/niri.md.
+    #[arg(trailing_var_arg = true, num_args = 0.., value_name = "COMMAND")]
+    pub app: Vec<String>,
 }
 
 /// Rejects scales that cannot produce a sane phantom output.
@@ -85,6 +100,11 @@ impl Cli {
             .and_then(|dirs| dirs.picture_dir().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."))
             .join(name)
+    }
+
+    #[must_use]
+    pub fn settle_duration(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.settle)
     }
 
     #[must_use]
