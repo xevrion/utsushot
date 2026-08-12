@@ -207,9 +207,138 @@ pub fn focused_output() -> Result<String, Error> {
         .ok_or_else(|| Error::Ipc("focused output has no name".into()))
 }
 
-/// Switches `name` to its largest mode, captures, and restores.
-pub fn capture(name: &str, path: &Path, settle: std::time::Duration) -> Result<Mode, Error> {
+/// Where a supersampling-capable compositor reads the requested factor from.
+///
+/// A file rather than an environment variable, because the compositor's
+/// environment is fixed when the session starts and the factor has to be
+/// chosen per capture.
+fn supersample_request_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(|d| std::path::PathBuf::from(d).join("niri-screenshot-supersample"))
+}
+
+/// Asks the compositor to render the screenshot itself, supersampled.
+///
+/// This is the approach that does what utsushot actually wants. niri's
+/// `Niri::screenshot` calls `render_to_vec(renderer, size, scale, ..)`, so
+/// multiplying both arguments renders the live desktop into an offscreen
+/// texture N times larger. The display is never reconfigured, so there is no
+/// modeset, no blanking, and no ceiling imposed by what the panel can show.
+///
+/// Stock niri 26.04 ignores the request file and produces an output-sized
+/// screenshot; the caller detects that from the resulting image and falls back
+/// to switching modes. The 16-line compositor patch that enables this lives in
+/// `docs/niri-supersample.patch`.
+fn try_compositor_supersample(path: &Path, factor: f64) -> Result<(), Error> {
+    let request = supersample_request_path()
+        .ok_or_else(|| Error::Ipc("XDG_RUNTIME_DIR is not set".into()))?;
+
+    std::fs::write(&request, factor.to_string())?;
+    // Removed however this returns, so a stale factor cannot silently apply to
+    // somebody else's screenshot later.
+    let _cleanup = RequestFileGuard(request);
+
+    let out = Command::new("niri")
+        .args(["msg", "action", "screenshot-screen"])
+        .args(["--write-to-disk", "true"])
+        .arg("--path")
+        .arg(path)
+        .output()
+        .map_err(|e| Error::Ipc(format!("could not run niri msg: {e}")))?;
+
+    if !out.status.success() {
+        return Err(Error::Capture(format!(
+            "niri screenshot failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
+    }
+
+    // The action returns as soon as the compositor accepts it; the PNG is
+    // encoded and written on another thread, so the file does not exist yet.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        if png_size(path).is_some() {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err(Error::Capture(
+        "the compositor accepted the screenshot but never wrote the file".into(),
+    ))
+}
+
+/// Reads the dimensions out of a PNG header.
+///
+/// Used to tell whether the compositor actually honoured a supersample
+/// request: a stock build writes an output-sized image and reports success, so
+/// the returned file is the only evidence of what really happened.
+fn png_size(path: &Path) -> Option<(u32, u32)> {
+    let bytes = std::fs::read(path).ok()?;
+    // 8-byte signature, then the IHDR chunk whose width and height are the
+    // first two big-endian u32s of its data at offsets 16 and 20.
+    if bytes.len() < 24 || &bytes[1..4] != b"PNG" {
+        return None;
+    }
+    let w = u32::from_be_bytes(bytes[16..20].try_into().ok()?);
+    let h = u32::from_be_bytes(bytes[20..24].try_into().ok()?);
+    Some((w, h))
+}
+
+struct RequestFileGuard(std::path::PathBuf);
+
+impl Drop for RequestFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Captures the live desktop, supersampled if the compositor can do it.
+///
+/// Two strategies, best first. If the compositor renders screenshots at a
+/// requested factor, nothing about the display changes and any factor works.
+/// Otherwise the output is switched to its largest mode for the capture, which
+/// blanks the screen briefly and is limited to what the panel advertises.
+pub fn capture(
+    name: &str,
+    path: &Path,
+    settle: std::time::Duration,
+    supersample: f64,
+) -> Result<Mode, Error> {
     let original = current_state(name)?;
+
+    // `screenshot-screen` always captures the focused output, so this path can
+    // only serve a request for that same output. Asking for another one has to
+    // fall through, or we would return a picture of the wrong screen.
+    let is_focused = focused_output().is_ok_and(|f| f == name);
+
+    if supersample > 1.0 && is_focused {
+        match try_compositor_supersample(path, supersample) {
+            Ok(()) => match png_size(path) {
+                // Honoured only if the image is larger than the output itself;
+                // an equal-sized one means the request was ignored.
+                Some((w, h)) if u64::from(w) * u64::from(h) > original.mode.pixels() => {
+                    tracing::info!("compositor rendered {w}x{h} without touching the display");
+                    return Ok(Mode {
+                        width: w,
+                        height: h,
+                        refresh: original.mode.refresh,
+                    });
+                }
+                Some((w, h)) => {
+                    // Stock niri wrote an output-sized image. Remove it, or the
+                    // fallback below could be skipped and this plausible but
+                    // un-supersampled file would be reported as success.
+                    tracing::debug!(
+                        "compositor ignored the request and wrote {w}x{h}; falling back"
+                    );
+                    let _ = std::fs::remove_file(path);
+                }
+                None => tracing::debug!("could not read the captured image; falling back"),
+            },
+            Err(e) => tracing::debug!("compositor screenshot unavailable ({e}); falling back"),
+        }
+    }
+
     let best = best_mode(name)?;
 
     tracing::debug!(

@@ -139,7 +139,7 @@ fn run_live(cli: &Cli) -> Result<(), Error> {
         std::fs::create_dir_all(parent)?;
     }
 
-    let captured = live::capture(&name, &output_path, cli.settle_duration())?;
+    let captured = live::capture(&name, &output_path, cli.settle_duration(), cli.scale)?;
     tracing::info!(
         "wrote {} ({}x{})",
         output_path.display(),

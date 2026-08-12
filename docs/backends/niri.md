@@ -132,6 +132,72 @@ physical output would be.
 The nested window is briefly visible on screen while it is sized and the target
 renders. Positioning it offscreen, or capturing quickly, mitigates this.
 
+## Why scale alone does nothing
+
+An obvious idea is to raise only the output scale and leave the mode alone, on
+the theory that clients would re-render at higher density into the same display.
+Measured on niri 26.04, that is not what happens:
+
+```console
+$ niri msg output winit scale 4
+buffer 1262x1386 | logical 315x346 @ scale 4.0
+```
+
+The framebuffer is unchanged and the logical desktop *shrinks*. Clients do
+re-render at 4x density, but the compositor then downsamples them into the same
+scanout buffer, so the extra detail is rendered and immediately discarded. The
+capture is identical in size and no sharper.
+
+This is the crux of the whole problem. The pixels utsushot wants are being drawn
+and thrown away. Keeping them would mean compositing into an offscreen buffer
+larger than the scanout buffer, which is a change inside the compositor.
+
+## Why `--live` is capped by the monitor
+
+`--live` raises the *mode*, which is the only thing that adds real pixels, and
+raises the scale alongside it so the logical layout is preserved. Its ceiling is
+therefore whatever modes the panel advertises. A monitor that lists a 3840x2160
+mode it does not normally use gives a genuine 2.25x capture; a laptop panel that
+lists only its native resolution gives nothing, and utsushot skips the modeset
+entirely rather than flickering the display for no gain.
+
+The mode change also blanks the screen while the link retrains. That is a
+hardware property of changing the signal timing and cannot be avoided from
+userspace.
+
+## What actually solves this: a 16-line compositor patch
+
+Everything above is a workaround for the compositor not offering the one thing
+needed. That thing turns out to be very small. `Niri::screenshot` in
+`src/niri.rs` already renders into an offscreen texture:
+
+```rust
+let size = output.current_mode().unwrap().size;
+let scale = Scale::from(output.current_scale().fractional_scale());
+let pixels = render_to_vec(renderer, size, scale, ..)?;
+```
+
+Multiplying `size` and `scale` by N renders the live desktop into a texture N
+times larger. The display is never touched, so there is no modeset, no blanking,
+and no ceiling from the panel. `docs/niri-supersample.patch` is that change.
+
+Verified against a patched niri 26.04 build on 2026-08-12. A nested instance
+with a 1262x1386 output produced a **5048x5544** screenshot, exactly 4x, with no
+mode change. Downscaling that result back to native and comparing against a
+plain capture gives an RMSE of 0.124, against 0.018 for `grim -s 4` upscaling of
+the same scene: roughly seven times more divergence, which is detail that only
+exists because the scene was re-rendered.
+
+utsushot asks for this by writing the factor to
+`$XDG_RUNTIME_DIR/niri-screenshot-supersample` before triggering
+`screenshot-screen`. A stock niri ignores the file and writes an output-sized
+image, which utsushot detects from the PNG header and discards before falling
+back. One limitation: `screenshot-screen` always captures the focused output, so
+this path is only used when the requested output is the focused one.
+
+Upstreaming this, or niri PR #3800 (virtual outputs), would remove the need for
+both the nested instance and the mode switching.
+
 ## Capture
 
 Currently shells out to `grim -o winit` against the nested display. Tracked in

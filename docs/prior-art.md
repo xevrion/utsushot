@@ -50,10 +50,48 @@ one. Tracked in #6.
 overriding it and puts it back afterwards, which is precisely what
 `RestoreToken` exists for.
 
-## Game photo modes
+## Hotsampling
 
-Console and PC photo modes commonly render at higher-than-display resolution
-before downsampling, which is supersampling in the same sense. They differ in
-purpose: they downsample back to display resolution for antialiasing, whereas
-utsushot keeps the full N× buffer, since the output is a file rather than a
-frame.
+The technique the screenshot community actually uses, and mechanically the same
+idea as utsushot's nested backend:
+
+> Hotsampling works by resizing the game window past the bounds of your monitor.
+> This resizing forces the game to render at the new resolution.
+
+That is exactly what the niri backend does: size a surface beyond the physical
+display and let the client re-render into it. Two groups converged on the same
+trick independently, which is reassuring about the design.
+
+Worth correcting a common belief, including one this document previously
+repeated: in-game photo modes do *not* generally render above display
+resolution. Cyberpunk 2077's does not, which is why a "Hot-Sampled Photomode
+Renders" mod exists at all, and the well-known 5K GTA V galleries were made with
+NVIDIA custom resolutions rather than a photo-mode feature. Supersampling in
+games usually comes from DSR/VSR, which are fake display modes applied to the
+whole desktop, not from photo mode itself.
+
+## Tiled rendering: NVIDIA Ansel and TR
+
+Ansel produces its very large captures by rendering the scene in tiles and
+stitching them, offsetting the projection matrix per tile. Its SDK says so
+directly, in `ansel/Camera.h`:
+
+> The amount that the projection matrix needs to be offset by. These values are
+> applied directly as translations to the projection matrix. These values are
+> only non-zero during Highres capture.
+
+Unreal's plugin confirms the same in `r.Photography.EnableMultipart`:
+"high-resolution shots that need to be rendered in tiles which are later
+stitched together". It is the same algorithm as Brian Paul's TR library from
+thirty years earlier.
+
+**This cannot be applied to a compositor**, and the reason is worth stating
+because it looks tempting. Tiling works by moving a camera: you render the same
+scene from a shifted frustum and paste the results together. A compositor has no
+camera and no scene, only finished client buffers at a fixed resolution.
+Shifting a viewport over them crops, it does not add detail.
+
+Tiling is also lossy for anything that depends on screen position. Unreal
+disables bloom dirt, lens flare, vignette and chromatic aberration under the
+comment "these effects tile poorly", and freezes auto-exposure so tiles do not
+each adapt to local brightness.
