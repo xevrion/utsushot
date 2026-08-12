@@ -7,6 +7,7 @@ mod capture;
 mod cli;
 mod detect;
 mod error;
+mod live;
 
 use clap::Parser;
 
@@ -41,6 +42,10 @@ fn run(cli: &Cli) -> Result<(), Error> {
     if cli.list_backends {
         list_backends(&env);
         return Ok(());
+    }
+
+    if cli.live {
+        return run_live(cli);
     }
 
     let kind = select_backend(cli, &env)?;
@@ -114,6 +119,40 @@ fn run(cli: &Cli) -> Result<(), Error> {
         capture::notify(&output_path);
     }
 
+    Ok(())
+}
+
+/// Captures the live desktop by briefly switching to a larger mode.
+fn run_live(cli: &Cli) -> Result<(), Error> {
+    capture::require(
+        "grim",
+        "install grim (e.g. `dnf install grim`, `apt install grim`)",
+    )?;
+
+    let name = match &cli.output_name {
+        Some(name) => name.clone(),
+        None => live::focused_output()?,
+    };
+
+    let output_path = cli.resolve_output();
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let captured = live::capture(&name, &output_path, cli.settle_duration())?;
+    tracing::info!(
+        "wrote {} ({}x{})",
+        output_path.display(),
+        captured.width,
+        captured.height
+    );
+
+    if cli.copy {
+        capture::copy_to_clipboard(&output_path)?;
+    }
+    if cli.notify {
+        capture::notify(&output_path);
+    }
     Ok(())
 }
 

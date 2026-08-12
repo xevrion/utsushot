@@ -41,6 +41,12 @@ Capturing your real, current screen at N× would instead mean reconfiguring your
 
 What would remove the tradeoff entirely is compositor support for genuine virtual outputs, which is [#10](https://github.com/xevrion/utsushot/issues/10).
 
+### Why not `grim -s 4`?
+
+Because it upscales. The flag is applied after the frame has already been captured: grim resamples the buffer with pixman, so `grim -s 4` writes a 7680x4320 file that carries no more detail than the 1920x1080 one.
+
+Measured on a 1920x1080 output: downscaling `grim -s 4` output back to native and comparing against a plain capture gives an RMSE of 0.018, meaning the two are 98% identical. The larger file is interpolation, not information. The man page wording ("Set the output image's scale factor") makes this easy to misread.
+
 ## Install
 
 Nothing is published yet. From source:

@@ -19,6 +19,9 @@ use clap::Parser;
 ///   7  capture succeeded but restoring the session failed
 #[derive(Debug, Parser)]
 #[command(name = "utsushot", version, about, long_about = None, verbatim_doc_comment)]
+// Command-line flags are booleans by nature, and grouping them into an enum to
+// satisfy the lint would make the parsed struct harder to use, not easier.
+#[allow(clippy::struct_excessive_bools, reason = "each field is a CLI flag")]
 pub struct Cli {
     /// Supersampling factor; the phantom output is this many times the
     /// physical resolution, at a matching `HiDPI` scale.
@@ -52,6 +55,19 @@ pub struct Cli {
     /// capturing too early catches a half-drawn frame.
     #[arg(long, default_value_t = 600)]
     pub settle: u64,
+
+    /// Capture the live desktop instead of running an application.
+    ///
+    /// Temporarily switches the output to the largest mode it advertises,
+    /// captures, then restores. Your screen visibly changes while this happens,
+    /// and the ceiling is whatever the monitor supports: a display whose best
+    /// mode equals its current one gains nothing.
+    #[arg(long)]
+    pub live: bool,
+
+    /// Output to capture in `--live` mode. Defaults to the focused one.
+    #[arg(long, value_name = "NAME")]
+    pub output_name: Option<String>,
 
     /// Verbose logging; repeat for more (-v debug, -vv trace).
     #[arg(short, long, action = clap::ArgAction::Count)]

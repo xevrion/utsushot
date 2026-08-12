@@ -3,7 +3,10 @@
 //! niri backend, built on a nested niri instance.
 //!
 //! niri cannot create outputs at runtime: its IPC only reconfigures outputs
-//! that already exist, and there is no headless backend. What it can do is run
+//! that already exist. A headless backend does exist in the source, but it is
+//! documented as being "for tests", leaves `import_dmabuf` unimplemented, and
+//! is selected by a parameter that `main.rs` hardcodes to `false`, so no flag
+//! or environment variable reaches it. What niri can do is run
 //! as a nested Wayland client, and that nested instance gets an output whose
 //! size is not limited by the physical display. Sizing that instance's window
 //! to 5120x2880 with a configured scale of 4 gives exactly the phantom output
