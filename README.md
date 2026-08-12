@@ -96,6 +96,13 @@ Roughly in order.
 
 Contributions are very welcome, and a new backend is the most useful one. [CONTRIBUTING.md](CONTRIBUTING.md) has a walkthrough of the `Backend` trait.
 
+## Support
+
+If utsushot is useful to you, consider buying me a coffee or sponsoring on GitHub. A star on the repo helps others find it too.
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-ff5e5b?style=flat-square&logo=ko-fi)](https://ko-fi.com/xevrion)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub-sponsor-ea4aaa?style=flat-square&logo=github-sponsors)](https://github.com/sponsors/xevrion)
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
