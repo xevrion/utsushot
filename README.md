@@ -8,7 +8,7 @@ Supersampled screenshots on Wayland. Instead of capturing your display's pixels 
 
 Named after utsushi-e (写し絵), the Edo-era magic-lantern shows that projected phantom images onto screens.
 
-> **Status: early development.** Working on niri: `utsushot -- <command>` produces a genuine N× capture. It photographs an application launched into the phantom, **not your existing desktop** — see [Scope](#scope) for why that distinction is currently forced on us.
+> **Status: early development.** Working on niri: `utsushot -- <command>` produces a genuine N× capture. It photographs an application launched into the phantom, **not your existing desktop**. See [Scope](#scope) for why that distinction is currently forced on us.
 
 ## Why not just upscale?
 
@@ -82,15 +82,15 @@ niri cannot create outputs over IPC as of 26.04, and neither the pre-configured-
 
 Roughly in order.
 
-- [x] **#1 niri phantom output** — nested niri instance, sized past the physical display
-- [x] **#2 niri target launch** — run the application inside the phantom and reap it afterwards
-- [x] **#4 real output geometry** — phantom derived from the focused output's logical size
-- [x] **#6 settle delay** — `--settle`, defaulting to 600ms, before capturing
-- [ ] **#9 capture the live session** — reconfigure the real output instead of nesting, so your actual desktop can be captured
-- [ ] **#10 upstream: virtual outputs in niri** — the fix that makes both modes clean
-- [ ] **#5 live integration tests** — assert captured dimensions and that a failed capture cleans up
-- [ ] **#3 native capture** — wlr-screencopy via `wayland-client`, dropping the `grim` dependency
-- [ ] **#7 sway backend** — `create_output` makes this the easy one
+- [x] **#1 niri phantom output**: nested niri instance, sized past the physical display
+- [x] **#2 niri target launch**: run the application inside the phantom and reap it afterwards
+- [x] **#4 real output geometry**: phantom derived from the focused output's logical size
+- [x] **#6 settle delay**: `--settle`, defaulting to 600ms, before capturing
+- [ ] **#9 capture the live session**: reconfigure the real output instead of nesting, so your actual desktop can be captured
+- [ ] **#10 virtual outputs in niri (upstream)**: the fix that makes both modes clean
+- [ ] **#5 live integration tests**: assert captured dimensions and that a failed capture cleans up
+- [ ] **#3 native capture**: wlr-screencopy via `wayland-client`, dropping the `grim` dependency
+- [ ] **#7 sway backend**: `create_output` makes this the easy one
 - [ ] **#8 hyprland backend**
 - [ ] Publish `0.0.1` to crates.io to reserve the name
 

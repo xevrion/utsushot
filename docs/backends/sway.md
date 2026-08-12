@@ -29,12 +29,12 @@ swaymsg output HEADLESS-1 unplug
 
 ## Mapping onto the trait
 
-- `create_phantom` — `create_output`, then diff `get_outputs` before and after
+- `create_phantom`: `create_output`, then diff `get_outputs` before and after
   to learn the new name, since `create_output` does not return it.
-- `move_target` — `move workspace to output HEADLESS-1`, recording the origin
+- `move_target`: `move workspace to output HEADLESS-1`, recording the origin
   output in the `RestoreToken`.
-- `capture` — `grim -o HEADLESS-1`, same as niri.
-- `cleanup` — move the workspace back, then `unplug`. Runs under `PhantomGuard`,
+- `capture`: `grim -o HEADLESS-1`, same as niri.
+- `cleanup`: move the workspace back, then `unplug`. Runs under `PhantomGuard`,
   so it must be idempotent and must not panic.
 
 ## Talking to sway

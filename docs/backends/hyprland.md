@@ -28,12 +28,12 @@ hyprctl output remove HEADLESS-1
 
 ## Mapping onto the trait
 
-- `create_phantom` — `output create headless`, then read `hyprctl -j monitors`
+- `create_phantom`: `output create headless`, then read `hyprctl -j monitors`
   to find the new name.
-- `move_target` — `dispatch moveworkspacetomonitor <ws> HEADLESS-1`, recording
+- `move_target`: `dispatch moveworkspacetomonitor <ws> HEADLESS-1`, recording
   the origin monitor in the `RestoreToken`.
-- `capture` — `grim -o HEADLESS-1`.
-- `cleanup` — move the workspace back, then `output remove`. Runs under
+- `capture`: `grim -o HEADLESS-1`.
+- `cleanup`: move the workspace back, then `output remove`. Runs under
   `PhantomGuard`; must be idempotent and must not panic.
 
 ## Note on scale
